@@ -12,15 +12,20 @@ pub use avr_hal_generic::adc::{AdcChannel, AdcOps, ClockDivider};
 #[repr(u8)]
 pub enum ReferenceVoltage {
     /// Voltage applied to AREF pin.
-    #[cfg(any(feature = "attiny85", feature = "attiny167",))]
+    #[cfg(any(feature = "attiny85", feature = "attiny167", feature = "attiny26"))]
     Aref,
     /// Default reference voltage (default).
     AVcc,
     /// Internal 1.1V reference.
+    #[cfg(any(feature = "attiny85", feature = "attiny88", feature = "attiny167"))]
     Internal1_1,
     /// Internal 2.56V reference.
-    #[cfg(any(feature = "attiny85", feature = "attiny167",))]
+    #[cfg(any(feature = "attiny85", feature = "attiny167", feature = "attiny26"))]
     Internal2_56,
+    /// Internal 2.56V reference with external capacitor at AREF pin.
+    #[cfg(any(feature = "attiny85", feature = "attiny167", feature = "attiny26"))]
+    Internal2_56_WithArefCapacitor,
+
 }
 
 impl Default for ReferenceVoltage {
@@ -59,11 +64,17 @@ pub mod channel {
     pub struct AVcc_4;
     pub struct Vbg;
     pub struct Gnd;
+    #[cfg(any(feature = "attiny85", feature = "attiny88", feature = "attiny167"))]
     pub struct Temperature;
 }
 
 fn apply_clock(peripheral: &crate::pac::ADC, settings: AdcSettings) {
-    peripheral.adcsra.write(|w| {
+    #[cfg(feature = "attiny26")]
+    let adcsr = &peripheral.adcsr;
+    #[cfg(any(feature = "attiny85", feature = "attiny88", feature = "attiny167"))]
+    let adcsr = &peripheral.adcsra;
+
+    adcsr.write(|w| {
         w.aden().set_bit();
         match settings.clock_divider {
             ClockDivider::Factor2 => w.adps().prescaler_2(),
@@ -181,5 +192,44 @@ avr_hal_generic::impl_adc! {
         channel::Vbg: crate::pac::adc::admux::MUX_A::ADC_VBG,
         channel::Gnd: crate::pac::adc::admux::MUX_A::ADC_GND,
         channel::Temperature: crate::pac::adc::admux::MUX_A::TEMPSENS,
+    },
+}
+
+#[cfg(feature = "attiny26")]
+avr_hal_generic::impl_adc! {
+    hal: crate::Attiny,
+    peripheral: crate::pac::ADC,
+    settings: AdcSettings,
+    apply_settings: |peripheral, settings| {
+        apply_clock(peripheral, settings);
+        peripheral.admux.write(|w| match settings.ref_voltage {
+            ReferenceVoltage::AVcc => w.refs().vcc(),
+            ReferenceVoltage::Aref => w.refs().aref(),
+            ReferenceVoltage::Internal2_56 => w.refs().internal_voltage_reference(),
+            ReferenceVoltage::Internal2_56_WithArefCapacitor => w.refs().internal_voltage_reference_with_external_capacitor_at_aref_pin(),
+        });
+    },
+    channel_id: crate::pac::adc::admux::MUX_A,
+    set_channel: |peripheral, id| {
+        peripheral.admux.modify(|_, w| w.mux().variant(id));
+    },
+    pins: {
+    	//TODO no didr?
+	//TODO differential channels
+        port::PA0: (crate::pac::adc::admux::MUX_A::ADC0, didr0::adc0d),
+        port::PA1: (crate::pac::adc::admux::MUX_A::ADC1, didr0::adc1d),
+        port::PA2: (crate::pac::adc::admux::MUX_A::ADC2, didr0::adc2d),
+        port::PA3: (crate::pac::adc::admux::MUX_A::ADC3, didr0::adc3d),
+        port::PA4: (crate::pac::adc::admux::MUX_A::ADC4, didr0::adc3d),
+        port::PA5: (crate::pac::adc::admux::MUX_A::ADC5, didr0::adc3d),
+        port::PA6: (crate::pac::adc::admux::MUX_A::ADC6, didr0::adc3d),
+        port::PA7: (crate::pac::adc::admux::MUX_A::ADC7, didr0::adc3d),
+        port::PA8: (crate::pac::adc::admux::MUX_A::ADC8, didr0::adc3d),
+        port::PA9: (crate::pac::adc::admux::MUX_A::ADC9, didr0::adc3d),
+        port::PA10: (crate::pac::adc::admux::MUX_A::ADC10, didr0::adc3d),
+    },
+    channels: {
+        channel::Vbg: crate::pac::adc::admux::MUX_A::ADC_VBG,
+        channel::Gnd: crate::pac::adc::admux::MUX_A::ADC_GND,
     },
 }

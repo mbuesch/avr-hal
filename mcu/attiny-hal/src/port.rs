@@ -41,3 +41,11 @@ avr_hal_generic::impl_port_traditional! {
         D: crate::pac::PORTD = [0, 1, 2, 3, 4, 5, 6, 7],
     }
 }
+
+#[cfg(feature = "attiny26")]
+avr_hal_generic::impl_port_traditional! {
+    enum Ports {
+        A: crate::pac::PORTA = [0, 1, 2, 3, 4, 5, 6, 7],
+        B: crate::pac::PORTB = [0, 1, 2, 3, 4, 5, 6, 7],
+    }
+}
